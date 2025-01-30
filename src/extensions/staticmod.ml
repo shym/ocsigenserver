@@ -116,6 +116,31 @@ let find_static_page ~request ~usermode ~dir ~(err : Cohttp.Code.status)
       (Ocsigen_extensions.Error_in_user_config_file
          "Staticmod: cannot use '..' in user paths")
 
+(* Borrowed from TyXML:lib/xml_print.ml (and wrapped) to avoid the dependency *)
+let html_of_string s =
+  let is_control c =
+    let cc = Char.code c in
+    cc <= 8 || cc = 11 || cc = 12 || (14 <= cc && cc <= 31) || cc = 127
+  in
+  let add_unsafe_char b = function
+    | '<' -> Buffer.add_string b "&lt;"
+    | '>' -> Buffer.add_string b "&gt;"
+    | '"' -> Buffer.add_string b "&quot;"
+    | '&' -> Buffer.add_string b "&amp;"
+    | c when is_control c ->
+        Buffer.add_string b "&#";
+        Buffer.add_string b (string_of_int (Char.code c));
+        Buffer.add_string b ";"
+    | c -> Buffer.add_char b c
+  in
+  let encode_unsafe_char s =
+    let b = Buffer.create (String.length s) in
+    String.iter (add_unsafe_char b) s;
+    Buffer.contents b
+  in
+  encode_unsafe_char s
+(* End of borrowed code *)
+
 let respond_dir relpath dname : (Cohttp.Response.t * Cohttp_lwt.Body.t) Lwt.t =
   let readsortdir =
     (* Read a complete directory and sort its entries *)
@@ -137,17 +162,20 @@ let respond_dir relpath dname : (Cohttp.Response.t * Cohttp_lwt.Body.t) Lwt.t =
   Lwt.catch
     (fun () ->
        readsortdir >>= fun entries ->
-       let render e = Format.asprintf "%a" (Tyxml.Html.pp_elt ()) e in
-       let t = render (Tyxml.Html.txt ("Directory listing for " ^ relpath)) in
+       let title = html_of_string ("Directory listing for " ^ relpath) in
        let entries =
          let open Tyxml.Html in
          List.filter_map
            (function
-              | "." | ".." -> None
-              | e -> Some (render (li [a ~a:[a_href e] [txt e]])))
+             | "." | ".." -> None
+             | e ->
+                 Some
+                   (Printf.sprintf "<li><a href=\"%t\">%t</li>"
+                      (fun () -> Ocsigen_lib.Url.encode ~plus:false e)
+                      (fun () -> html_of_string e)))
            entries
        in
-       (* Chunks of [html (head (title t) []) (body [h1 [t]; ul entries])] *)
+       (* Chunks of [html (head (title x) []) (body [h1 [x]; ul y])] *)
        let chunk1 =
          {|<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml"><head><title>|}
@@ -155,7 +183,7 @@ let respond_dir relpath dname : (Cohttp.Response.t * Cohttp_lwt.Body.t) Lwt.t =
        and chunk3 = {|</h1><ul>|}
        and chunkend = {|</ul></body></html>|} in
        let doc =
-         chunk1 :: t :: chunk2 :: t :: chunk3 :: (entries @ [chunkend])
+         chunk1 :: title :: chunk2 :: title :: chunk3 :: (entries @ [chunkend])
        in
        let headers = Cohttp.Header.init_with "content-type" "text/html" in
        Lwt.return

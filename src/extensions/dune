@@ -56,7 +56,7 @@
   (name staticmod)
   (public_name ocsigenserver.ext.staticmod)
   (modules staticmod)
-  (libraries tyxml ocsigenserver))
+  (libraries ocsigenserver))
 
 (library
   (name userconf)
