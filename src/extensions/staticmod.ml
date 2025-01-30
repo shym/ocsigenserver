@@ -170,7 +170,7 @@ let respond_dir relpath dname : (Cohttp.Response.t * Cohttp_lwt.Body.t) Lwt.t =
              | "." | ".." -> None
              | e ->
                  Some
-                   (Printf.sprintf "<li><a href=\"%t\">%t</li>"
+                   (Printf.sprintf "<li><a href=\"%t\">%t</a></li>"
                       (fun () -> Ocsigen_lib.Url.encode ~plus:false e)
                       (fun () -> html_of_string e)))
            entries
