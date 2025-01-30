@@ -164,7 +164,6 @@ let respond_dir relpath dname : (Cohttp.Response.t * Cohttp_lwt.Body.t) Lwt.t =
        readsortdir >>= fun entries ->
        let title = html_of_string ("Directory listing for " ^ relpath) in
        let entries =
-         let open Tyxml.Html in
          List.filter_map
            (function
              | "." | ".." -> None
